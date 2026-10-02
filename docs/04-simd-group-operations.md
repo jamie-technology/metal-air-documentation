@@ -75,3 +75,12 @@ These are the easiest GPU-specific ops to emit: pick the right
 `air.simd_<op>.<type>` name, match the `i16` lane-argument convention, and emit
 a normal call. There is no metadata contract beyond the intrinsic declaration
 itself.
+
+One caveat found the hard way: the ops require a **fully typed-pointer** module.
+A device-buffer kernel assembled with opaque pointers (`ptr addrspace(1)`) loads
+fine on the AGX driver — until it contains an `air.simd_*` call, at which point
+pipeline creation fails with `AGXMetalG13X Code=3 "Failed to upgrade function
+bitcode"`. The real `metal` compiler's output for these is fully typed
+(`float addrspace(1)*`), and typing the kernel's pointers makes it load. So a
+backend that emits opaque pointers elsewhere must switch to typed pointers for
+any module that uses the SIMD-group (or `air.simdgroup_matrix_*`) intrinsics.
