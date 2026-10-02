@@ -133,3 +133,18 @@ xcrun metal-validate yourkernel.metallib              # metadata / ABI checks
 Then load it at runtime with `newLibraryWithData:` and confirm the function is
 enumerable and a pipeline state builds. If assembly succeeds but the function is
 missing, suspect the entry-point metadata (step 3) first.
+
+## Typed pointers are mandatory on the current driver
+
+`metal-as` (LLVM ~17) still accepts opaque `ptr`, but the current macOS AGX
+driver rejects an opaque-pointer AIR module at pipeline-creation time with
+`AGXMetalG13X Code=3 "Failed to upgrade function bitcode"` — verified across
+plain device-buffer kernels, atomics, SIMD-group ops, textures and
+vertex/fragment stages. The real `metal` compiler's output is fully typed, so a
+backend emitting LLVM must emit **typed** pointers throughout (or, if its LLVM is
+opaque-only, reconstruct them before `metal-as`). Typing is all-or-nothing: a
+module mixing typed loads with an opaque intrinsic operand or a stray opaque
+`llvm.lifetime` / unused `air.*` declaration is rejected by `metal-as`
+("expected type"). Note the handle types this implies — a texture argument is
+`%struct._texture_2d_t addrspace(1)*` (an opaque named struct), a sampler
+`%struct._sampler_t addrspace(2)*` — not a byte pointer.
